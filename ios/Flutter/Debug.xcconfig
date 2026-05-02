@@ -1,0 +1,9 @@
+#include "Generated.xcconfig"
+#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"
+
+// Disable dead code stripping to preserve P2P symbols
+DEAD_CODE_STRIPPING = NO
+
+// Force load P2P static library to expose symbols
+// IMPORTANT: Use += to append, not = to override!
+OTHER_LDFLAGS = $(inherited) -force_load "$(PROJECT_DIR)/Frameworks/libp2p_ios.a" -framework Security -lresolv

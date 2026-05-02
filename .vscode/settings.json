@@ -1,0 +1,15 @@
+{
+  "dart.flutterSdkPath": null,
+  "dart.analysisExcludedFolders": [],
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/**": true,
+    "**/build/**": true,
+    "**/.dart_tool/**": true
+  },
+  "search.exclude": {
+    "**/build": true,
+    "**/.dart_tool": true,
+  }
+}
