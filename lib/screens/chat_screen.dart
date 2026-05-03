@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_linkify/flutter_linkify.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/services_provider.dart';
 import '../services/p2p_service.dart';
 import '../services/interfaces/i_identity_service.dart';
@@ -1066,12 +1068,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                         alignment: Alignment.centerLeft,
                         child: _buildReplyIndicator(message)!,
                       ),
-                    Text(
-                      message.plaintext ?? '[Encrypted]',
+                    Linkify(
+                      onOpen: (link) async {
+                        final uri = Uri.parse(link.url);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        }
+                      },
+                      text: message.plaintext ?? '[Encrypted]',
                       style: TextStyle(
                         color: Theme.of(context).brightness == Brightness.dark
                             ? Colors.white
                             : Colors.black87,
+                      ),
+                      linkStyle: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                        decoration: TextDecoration.none,
                       ),
                     ),
                   const SizedBox(height: 4),
