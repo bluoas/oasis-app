@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:gal/gal.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../providers/services_provider.dart';
@@ -25,11 +27,15 @@ class ShowMyQrCodeScreen extends ConsumerStatefulWidget {
   ConsumerState<ShowMyQrCodeScreen> createState() => _ShowMyQrCodeScreenState();
 }
 
-class _ShowMyQrCodeScreenState extends ConsumerState<ShowMyQrCodeScreen> {
+class _ShowMyQrCodeScreenState extends ConsumerState<ShowMyQrCodeScreen>
+    with TickerProviderStateMixin {
   
   // Feature flag for network switching UI (temporary disabled)
   static const bool _enableNetworkSwitching = false;
-  
+
+  late TabController _tabController;
+  int _selectedTab = 0; // 0 = Share Contact, 1 = Share Publicly
+
   String _userName = '';
   String? _profileImagePath;
 
@@ -44,6 +50,12 @@ class _ShowMyQrCodeScreenState extends ConsumerState<ShowMyQrCodeScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        setState(() => _selectedTab = _tabController.index);
+      }
+    });
     _loadUserName();
     _loadProfileImage();
     _loadPrivateNetworkData();
@@ -55,6 +67,7 @@ class _ShowMyQrCodeScreenState extends ConsumerState<ShowMyQrCodeScreen> {
 
   @override
   void dispose() {
+    _tabController.dispose();
     // Remove network listener (safe to use cached instance)
     _networkService?.removeListener(_onNetworkChanged);
     super.dispose();
@@ -196,61 +209,45 @@ class _ShowMyQrCodeScreenState extends ConsumerState<ShowMyQrCodeScreen> {
             );
           }
 
-          // Determine whether we're on a private network
           final isPrivateNetwork = _psk != null && _privateMultiaddr != null;
-
-          String? activeNode;
-          if (isPrivateNetwork) {
-            // On private network: always use the private node's multiaddr
-            activeNode = _privateMultiaddr;
-          } else {
-            // On public network: Use CURRENTLY CONNECTED node (CRITICAL for key exchange!)
-            // This ensures that when someone scans the QR code, the key exchange
-            // is stored on the same node that this user is polling from.
-            activeNode = p2pService.activeBootstrapNode;
-
-            if (activeNode != null) {
-              Logger.info('✅ Using currently connected node in QR code');
-            } else {
-              Logger.warning('⚠️ No active node connection - QR code may not work for key exchange!');
-            }
-          }
-
           final displayName = _userName.isNotEmpty ? _userName : 'User ${peerID.substring(peerID.length - 8)}';
 
-          // Create QR data in compact JSON format
-          final qrData = {
-            't': 'oasis_contact',  // type (compact)
-            'p': peerID,            // peer_id (compact)
-            'n': displayName,       // name (compact)
-            if (activeNode != null) 'm': activeNode,  // node multiaddr (compact)
-            if (isPrivateNetwork) 'k': _psk!,         // PSK (private network only)
-            if (isPrivateNetwork && _privateNetworkName != null)
-              'net': _privateNetworkName!,             // network name (private network only)
+          // QR with node address (for display)
+          String? activeNode;
+          if (isPrivateNetwork) {
+            activeNode = _privateMultiaddr;
+          } else {
+            activeNode = p2pService.activeBootstrapNode;
+          }
+          final qrDataWithNode = {
+            't': 'oasis_contact',
+            'p': peerID,
+            'n': displayName,
+            if (activeNode != null) 'm': activeNode,
+            if (isPrivateNetwork) 'k': _psk!,
+            if (isPrivateNetwork && _privateNetworkName != null) 'net': _privateNetworkName!,
           };
+          final qrStringWithNode = jsonEncode(qrDataWithNode);
 
-          final qrString = jsonEncode(qrData);
-          
-          // Debug: Log QR content
-          Logger.debug('QR Code generated:');
-          Logger.debug('   PeerID: $peerID');
-          Logger.debug('   Name: $displayName');
-          Logger.debug('   Node: ${activeNode ?? 'NONE - NO NODE AVAILABLE!'}');
-          Logger.debug('   Private: $isPrivateNetwork${isPrivateNetwork ? ' (${_privateNetworkName ?? 'unnamed'})' : ''}');
-          Logger.debug('   QR JSON: $qrString');
+          // QR without node address (for save/share)
+          final qrDataNoNode = {
+            't': 'oasis_contact',
+            'p': peerID,
+            'n': displayName,
+          };
+          final qrStringNoNode = jsonEncode(qrDataNoNode);
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // QR Code
+                // QR Code with node address (always shown)
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Column(
                       children: [
-                        // Profile Avatar
                         CircleAvatar(
                           radius: 50,
                           backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
@@ -267,7 +264,6 @@ class _ShowMyQrCodeScreenState extends ConsumerState<ShowMyQrCodeScreen> {
                               : null,
                         ),
                         const SizedBox(height: 12),
-                        // Username below Profile Avatar
                         Text(
                           displayName,
                           style: const TextStyle(
@@ -284,7 +280,7 @@ class _ShowMyQrCodeScreenState extends ConsumerState<ShowMyQrCodeScreen> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: QrImageView(
-                            data: qrString,
+                            data: qrStringWithNode,
                             version: QrVersions.auto,
                             size: 280,
                             backgroundColor: Colors.white,
@@ -293,9 +289,7 @@ class _ShowMyQrCodeScreenState extends ConsumerState<ShowMyQrCodeScreen> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          isPrivateNetwork
-                              ? 'Scan to add & join ${_privateNetworkName ?? 'Private Network'}'
-                              : 'Scan to add ${_userName.isNotEmpty ? _userName : 'me'}',
+                          'Scan to add contact',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -306,18 +300,79 @@ class _ShowMyQrCodeScreenState extends ConsumerState<ShowMyQrCodeScreen> {
                     ),
                   ),
                 ),
-                
                 const SizedBox(height: 24),
-                
-                // Copy Contact Code Button
+                // Save QR Code (without node address)
                 GestureDetector(
                   onTap: () async {
-                    // Just copy the Base64 code (without oasis:// prefix)
-                    // This works everywhere: WhatsApp, Telegram, Email, SMS
-                    final base64Data = base64Encode(utf8.encode(qrString));
-                    
+                    try {
+                      final painter = QrPainter(
+                        data: qrStringNoNode,
+                        version: QrVersions.auto,
+                        errorCorrectionLevel: QrErrorCorrectLevel.M,
+                        color: const Color(0xFF000000),
+                        emptyColor: const Color(0xFFFFFFFF),
+                      );
+                      final imageData = await painter.toImageData(
+                        1024,
+                        format: ui.ImageByteFormat.png,
+                      );
+                      if (imageData == null) throw Exception('Failed to render QR code');
+                      await Gal.putImageBytes(imageData.buffer.asUint8List());
+                      if (mounted) {
+                        showTopNotification(
+                          context,
+                          'QR code saved to gallery.',
+                          duration: const Duration(seconds: 2),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        showTopNotification(
+                          context,
+                          'Could not save QR code: $e',
+                          duration: const Duration(seconds: 3),
+                        );
+                      }
+                    }
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.save_alt,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Save QR Code',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // Share Contact Code (without node address)
+                GestureDetector(
+                  onTap: () async {
+                    final base64Data = base64Encode(utf8.encode(qrStringNoNode));
                     await Clipboard.setData(ClipboardData(text: base64Data));
-                    
                     if (mounted) {
                       showTopNotification(
                         context,
