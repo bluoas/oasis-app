@@ -1189,10 +1189,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   }
 
   Widget _buildMessageInput() {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
     // Show blocked message if blocked by other user
     if (_isBlockedByOther) {
       return Container(
-        margin: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        margin: EdgeInsets.fromLTRB(16, 8, 16, 8 + bottomPadding),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: Colors.red[100],
@@ -1218,7 +1219,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     }
     
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 24),
+      padding: EdgeInsets.fromLTRB(8, 8, 8, 8 + bottomPadding),
       child: _isRecording
           ? // Full-width recording UI when recording with reply preview
             Column(
