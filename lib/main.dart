@@ -87,14 +87,21 @@ class _MyAppState extends ConsumerState<MyApp> {
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 6),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               const Icon(Icons.wifi_off,
                                   color: Colors.white, size: 14),
-                              const SizedBox(width: 8),
+                              const SizedBox(height: 4),
                               const Text(
-                                'No internet connection \u2013 please restart the app when you\'re back online',
+                                'No internet connection',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                              const Text(
+                                'please restart the app when you\'re back online',
+                                textAlign: TextAlign.center,
                                 style: TextStyle(
                                     color: Colors.white, fontSize: 12),
                               ),
