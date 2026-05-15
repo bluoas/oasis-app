@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -65,6 +66,7 @@ class _MyAppState extends ConsumerState<MyApp> {
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeProvider);
     final config = ref.watch(appConfigProvider);
+    final isOffline = ref.watch(connectivityProvider);
 
     return MaterialApp(
       title: config.isDevelopment ? 'Oasis (DEV)' : 'Oasis',
@@ -73,6 +75,39 @@ class _MyAppState extends ConsumerState<MyApp> {
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
       home: const AuthGate(),
+      builder: isOffline
+          ? (context, child) => Column(
+                children: [
+                  Material(
+                    color: Colors.orange.shade700,
+                    child: SafeArea(
+                      bottom: false,
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 6),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.wifi_off,
+                                  color: Colors.white, size: 14),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'No internet connection \u2013 please restart the app when you\'re back online',
+                                style: TextStyle(
+                                    color: Colors.white, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(child: child!),
+                ],
+              )
+          : null,
     );
   }
 }
@@ -138,6 +173,20 @@ class _InitializationScreenState extends ConsumerState<InitializationScreen> {
       // TODO(coming-soon): Re-enable CallService eager init when call feature ships
       // ref.read(callServiceProvider);
       
+      // Check internet connectivity early so the UI can warn the user
+      bool hasInternet = false;
+      try {
+        final lookup = await InternetAddress.lookup('google.com')
+            .timeout(const Duration(seconds: 3));
+        hasInternet = lookup.isNotEmpty && lookup.first.rawAddress.isNotEmpty;
+      } catch (_) {
+        hasInternet = false;
+      }
+      if (!hasInternet && mounted) {
+        ref.read(connectivityProvider.notifier).state = true;
+        Logger.warning('⚠️ No internet connection at startup');
+      }
+
       // Initialize network service first to load active network selection
       await networkService.initialize();
       

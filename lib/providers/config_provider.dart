@@ -10,3 +10,9 @@ final appConfigProvider = Provider<AppConfig>((ref) {
   // In practice, this is always overridden by the main entry point
   return AppConfig.development();
 });
+
+/// Global connectivity state
+/// 
+/// Set to true when no internet connection is detected at startup.
+/// Watched by MaterialApp.builder to show a persistent offline banner across all screens.
+final connectivityProvider = StateProvider<bool>((ref) => false);
