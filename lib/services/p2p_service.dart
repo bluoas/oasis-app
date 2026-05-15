@@ -329,7 +329,22 @@ class P2PService {
       Logger.info('   🎲 Node order randomized for privacy');
     }
     _nodeHealthScores.clear();
-    
+
+    // Check internet connectivity before attempting node connections.
+    // If the device has no internet, connection failures are not the node's fault
+    // and must not cause nodes to be blacklisted for 24 hours.
+    bool hasInternetConnection = false;
+    try {
+      final lookup = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(seconds: 3));
+      hasInternetConnection = lookup.isNotEmpty && lookup.first.rawAddress.isNotEmpty;
+    } catch (_) {
+      hasInternetConnection = false;
+    }
+    if (!hasInternetConnection) {
+      Logger.warning('⚠️ No internet connection detected at startup - node blacklisting suspended');
+    }
+
     // Try to connect to first available Oasis Node (if any configured)
     // Note: If no Oasis Nodes configured yet, this is OK - auto-discovery will find them
     bool connected = false;
@@ -365,8 +380,10 @@ class P2PService {
           }
           
           // Blacklist failed discovered nodes (not user's own nodes)
-          // This prevents repeated timeouts on future app starts
-          if (!isMyOasisNode && _bootstrapNodesService != null && isPublicNetworkForNodes) {
+          // This prevents repeated timeouts on future app starts.
+          // Guard: Only blacklist if internet is available - a failed connection without
+          // internet means the node is fine, the device is offline.
+          if (!isMyOasisNode && _bootstrapNodesService != null && isPublicNetworkForNodes && hasInternetConnection) {
             final peerID = extractPeerIDFromMultiaddr(peer);
             await _bootstrapNodesService.blacklistNode(peerID);
           }
